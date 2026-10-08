@@ -3,7 +3,30 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import TeacherCard from '../components/TeacherCard';
 import FilterBar from '../components/FilterBar';
+import TeacherMap, { getCoordinates } from '../components/TeacherMap';
+import TeacherCardSkeleton from '../components/TeacherCardSkeleton';
 import { HiOutlineSearch, HiOutlineViewGrid, HiOutlineViewList } from 'react-icons/hi';
+
+const scoreTeacherMatch = (teacher, preferences) => {
+  const { subject, state, district, city, minFee, maxFee, time } = preferences;
+  const teacherSubjects = (teacher.subjects || []).map((value) => value.toLowerCase());
+  const subjectMatch = subject ? teacherSubjects.includes(subject.toLowerCase()) ? 1 : 0 : 0.5;
+  const areaMatch = city
+    ? teacher.location?.city?.toLowerCase() === city.toLowerCase() ? 1 : 0
+    : district
+    ? teacher.location?.district?.toLowerCase() === district.toLowerCase() ? 1 : 0
+    : state
+    ? teacher.location?.state?.toLowerCase() === state.toLowerCase() ? 1 : 0
+    : 0.5;
+  const fee = Number(teacher.feePerHour);
+  const hasBudget = minFee || maxFee;
+  const budgetMatch = hasBudget
+    ? (!minFee || fee >= Number(minFee)) && (!maxFee || fee <= Number(maxFee)) ? 1 : 0
+    : 0.5;
+  const availability = `${teacher.availability || ''} ${(teacher.availabilitySlots || []).map((slot) => `${slot.day} ${slot.start} ${slot.end}`).join(' ')}`.toLowerCase();
+  const timeMatch = time ? availability.includes(time.toLowerCase()) ? 1 : 0.35 : 0.5;
+  return Math.round((subjectMatch * 40 + areaMatch * 25 + budgetMatch * 20 + timeMatch * 15) * 0.98);
+};
 
 // Demo data used when backend is not available
 const DEMO_TEACHERS = [
@@ -113,6 +136,50 @@ const Teachers = () => {
   });
   const [view, setView] = useState('grid'); // grid | list
   const [useDemo, setUseDemo] = useState(false);
+  const [mapMode, setMapMode] = useState(false);
+  const [nearbyOnly, setNearbyOnly] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationMessage, setLocationMessage] = useState('');
+  const [preferredTime, setPreferredTime] = useState(searchParams.get('time') || '');
+  const [sortMode, setSortMode] = useState('match');
+
+  const nearbyTeachers = nearbyOnly && userLocation
+    ? teachers.filter((teacher) => {
+        const coordinates = getCoordinates(teacher);
+        if (!coordinates) return false;
+        const [lat, lng] = coordinates;
+        const [userLat, userLng] = userLocation;
+        const latDistance = (lat - userLat) * 111;
+        const lngDistance = (lng - userLng) * 111 * Math.cos((userLat * Math.PI) / 180);
+        return Math.sqrt(latDistance ** 2 + lngDistance ** 2) <= 2;
+      })
+    : teachers;
+
+  const visibleTeachers = nearbyTeachers
+    .map((teacher) => ({
+      ...teacher,
+      matchScore: scoreTeacherMatch(teacher, { ...filters, time: preferredTime }),
+      distanceKm: userLocation && getCoordinates(teacher)
+        ? Math.sqrt((((getCoordinates(teacher)[0] - userLocation[0]) * 111) ** 2) + (((getCoordinates(teacher)[1] - userLocation[1]) * 111 * Math.cos((userLocation[0] * Math.PI) / 180)) ** 2))
+        : undefined
+    }))
+    .sort((a, b) => sortMode === 'match' ? b.matchScore - a.matchScore : 0);
+
+  const findNearby = () => {
+    if (!navigator.geolocation) {
+      setLocationMessage('Location is not supported by this browser.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setUserLocation([coords.latitude, coords.longitude]);
+        setNearbyOnly(true);
+        setMapMode(true);
+        setLocationMessage('Showing teachers within 2 km from you.');
+      },
+      () => setLocationMessage('Allow location access to find teachers within 2 km.')
+    );
+  };
 
   const fetchTeachers = useCallback(async (activeFilters = filters, query = search) => {
     setLoading(true);
@@ -184,6 +251,15 @@ const Teachers = () => {
     fetchTeachers(filters, search);
   };
 
+  const handleTimeChange = (event) => {
+    const value = event.target.value;
+    setPreferredTime(value);
+    const params = new URLSearchParams(searchParams);
+    if (value) params.set('time', value);
+    else params.delete('time');
+    setSearchParams(params);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
@@ -221,6 +297,21 @@ const Teachers = () => {
         </div>
       </form>
 
+      <div className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-orange-100 bg-orange-50/70 p-4 dark:border-gray-700 dark:bg-gray-800/60">
+        <div>
+          <label htmlFor="preferred-time" className="block text-sm font-semibold text-gray-800 dark:text-gray-200">Preferred time</label>
+          <input id="preferred-time" value={preferredTime} onChange={handleTimeChange} className="input-field mt-1 w-48 bg-white" placeholder="e.g. evening, Mon" />
+        </div>
+        <div>
+          <label htmlFor="match-sort" className="block text-sm font-semibold text-gray-800 dark:text-gray-200">Sort teachers</label>
+          <select id="match-sort" value={sortMode} onChange={(event) => setSortMode(event.target.value)} className="input-field mt-1 w-48 bg-white">
+            <option value="match">Best match</option>
+            <option value="rating">Top rated</option>
+          </select>
+        </div>
+        <p className="pb-2 text-xs text-gray-600 dark:text-gray-300">Matches consider subject, area, budget, and availability.</p>
+      </div>
+
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Filters sidebar */}
         <aside className="lg:w-72 shrink-0">
@@ -231,9 +322,14 @@ const Teachers = () => {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              {loading ? 'Loading...' : `${teachers.length} teacher${teachers.length !== 1 ? 's' : ''} found`}
+              {loading ? 'Loading...' : `${visibleTeachers.length} teacher${visibleTeachers.length !== 1 ? 's' : ''} found`}
             </p>
-            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button onClick={findNearby} className="btn-secondary py-2 px-3 text-sm">Near me: 2 km</button>
+              <button onClick={() => setMapMode((current) => !current)} className="btn-secondary py-2 px-3 text-sm">
+                {mapMode ? 'List view' : 'Map view'}
+              </button>
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
               <button
                 onClick={() => setView('grid')}
                 className={`p-2 rounded-md transition ${
@@ -250,16 +346,18 @@ const Teachers = () => {
               >
                 <HiOutlineViewList className="w-5 h-5" />
               </button>
+              </div>
             </div>
           </div>
 
+          {locationMessage && <p className="mb-4 text-sm text-primary-700 dark:text-primary-300">{locationMessage}</p>}
+          {mapMode && !loading && <div className="mb-6"><TeacherMap teachers={visibleTeachers} userLocation={userLocation} /></div>}
+
           {loading ? (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="card h-80 animate-pulse bg-gray-100 dark:bg-gray-800" />
-              ))}
+              {[1, 2, 3, 4, 5, 6].map((i) => <TeacherCardSkeleton key={i} />)}
             </div>
-          ) : teachers.length === 0 ? (
+          ) : visibleTeachers.length === 0 ? (
             <div className="card p-12 text-center">
               <p className="text-xl font-semibold text-gray-700 dark:text-gray-300">No teachers found</p>
               <p className="text-gray-500 mt-2">Try adjusting your filters or search term.</p>
@@ -278,7 +376,7 @@ const Teachers = () => {
                   : 'flex flex-col gap-4'
               }
             >
-              {teachers.map((t) => (
+              {visibleTeachers.map((t) => (
                 <TeacherCard key={t._id} teacher={t} />
               ))}
             </div>

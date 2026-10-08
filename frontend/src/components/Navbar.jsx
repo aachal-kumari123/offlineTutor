@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -9,13 +9,45 @@ import {
   HiOutlineSun,
   HiOutlineUser,
   HiOutlineLogout,
+  HiOutlineBell,
 } from 'react-icons/hi';
+import api from '../api/axios';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return undefined;
+    }
+    let active = true;
+    const loadNotifications = async () => {
+      try {
+        const { data } = await api.get('/contact/my-requests');
+        if (!active) return;
+        const requests = data.connections || [];
+        const items = requests.slice(0, 5).map((request) => {
+          if (user.role === 'student') {
+            const label = request.status === 'accepted' ? 'accepted your request' : request.status === 'rejected' ? 'declined your request' : 'received your request';
+            return { id: request._id, text: `${request.teacher?.name || 'Teacher'} ${label}`, date: request.updatedAt || request.createdAt };
+          }
+          return { id: request._id, text: `${request.student?.name || 'Student'} sent you a request`, date: request.createdAt };
+        });
+        setNotifications(items);
+      } catch {
+        if (active) setNotifications([]);
+      }
+    };
+    loadNotifications();
+    const interval = window.setInterval(loadNotifications, 30000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [user]);
 
   const toggleDark = () => {
     document.documentElement.classList.toggle('dark');
@@ -81,6 +113,18 @@ const Navbar = () => {
 
             {user ? (
               <div className="flex items-center gap-3">
+                <div className="relative">
+                  <button type="button" onClick={() => setNotificationsOpen((value) => !value)} className="relative rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" aria-label="Notifications">
+                    <HiOutlineBell className="h-5 w-5" />
+                    {notifications.length > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />}
+                  </button>
+                  {notificationsOpen && (
+                    <div className="absolute right-0 top-12 z-50 w-80 rounded-xl border border-orange-100 bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700"><strong>Notifications</strong><span className="text-xs text-gray-500">{notifications.length} recent</span></div>
+                      {notifications.length ? notifications.map((notification) => <Link key={notification.id} to="/dashboard" onClick={() => setNotificationsOpen(false)} className="block border-b border-gray-100 py-3 text-sm last:border-0 dark:border-gray-700"><span>{notification.text}</span><span className="mt-1 block text-xs text-gray-400">{new Date(notification.date).toLocaleDateString()}</span></Link>) : <p className="py-4 text-sm text-gray-500">No new notifications</p>}
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
                     <HiOutlineUser className="w-4 h-4 text-primary-600 dark:text-primary-400" />

@@ -44,9 +44,11 @@ router.post(
         experience,
         feePerHour,
         availability,
+        availabilitySlots,
         bio,
         location,
-        profileImage
+        profileImage,
+        demoVideo
       } = req.body;
 
       // Check if user already exists
@@ -65,7 +67,8 @@ router.post(
         password,
         role,
         phone,
-        profileImage
+        profileImage,
+        demoVideo
       };
 
       // Add teacher specific fields
@@ -75,6 +78,7 @@ router.post(
         userData.experience = experience || 0;
         userData.feePerHour = feePerHour;
         userData.availability = availability;
+        userData.availabilitySlots = Array.isArray(availabilitySlots) ? availabilitySlots : [];
         userData.bio = bio;
         userData.location = location || {};
       }
@@ -98,10 +102,13 @@ router.post(
           experience: user.experience,
           feePerHour: user.feePerHour,
           availability: user.availability,
+          availabilitySlots: user.availabilitySlots,
           bio: user.bio,
           location: user.location,
           profileImage: user.profileImage,
+          demoVideo: user.demoVideo,
           averageRating: user.averageRating
+          ,identityVerified: user.identityVerified
         }
       });
     } catch (error) {
@@ -169,11 +176,14 @@ router.post(
           experience: user.experience,
           feePerHour: user.feePerHour,
           availability: user.availability,
+          availabilitySlots: user.availabilitySlots,
           bio: user.bio,
           location: user.location,
           profileImage: user.profileImage,
+          demoVideo: user.demoVideo,
           averageRating: user.averageRating,
           totalReviews: user.totalReviews
+          ,identityVerified: user.identityVerified
         }
       });
     } catch (error) {
@@ -219,9 +229,13 @@ router.put('/profile', protect, async (req, res) => {
       'experience',
       'feePerHour',
       'availability',
+      'availabilitySlots',
       'bio',
       'location',
-      'profileImage'
+      'profileImage',
+      'demoVideo'
+      ,'identityDocument'
+      ,'identityDocumentName'
     ];
 
     const updates = {};
@@ -230,6 +244,10 @@ router.put('/profile', protect, async (req, res) => {
         updates[field] = req.body[field];
       }
     });
+
+    if (req.user.role === 'teacher' && updates.identityDocument) {
+      updates.identityVerified = false;
+    }
 
     const user = await User.findByIdAndUpdate(req.user.id, updates, {
       new: true,
@@ -247,6 +265,26 @@ router.put('/profile', protect, async (req, res) => {
       message: 'Server error',
       error: error.message
     });
+  }
+});
+
+// @route   PUT /api/auth/teachers/:id/verify
+// @desc    Approve a teacher identity document
+// @access  Private (configured admin email)
+router.put('/teachers/:id/verify', protect, async (req, res) => {
+  if (!process.env.ADMIN_EMAIL || req.user.email !== process.env.ADMIN_EMAIL) {
+    return res.status(403).json({ success: false, message: 'Admin access required' });
+  }
+  try {
+    const user = await User.findOneAndUpdate(
+      { _id: req.params.id, role: 'teacher', identityDocument: { $exists: true, $ne: '' } },
+      { identityVerified: true },
+      { new: true }
+    ).select('-password');
+    if (!user) return res.status(404).json({ success: false, message: 'Teacher ID document not found' });
+    res.json({ success: true, message: 'Teacher identity verified', user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Could not verify teacher', error: error.message });
   }
 });
 

@@ -1,5 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
+const Connection = require('../models/Connection');
 const { protect, restrictTo } = require('../middleware/auth');
 
 const router = express.Router();
@@ -133,7 +134,9 @@ router.get('/:id', async (req, res) => {
     const teacher = await User.findOne({
       _id: req.params.id,
       role: 'teacher'
-    }).select('-password');
+    })
+      .select('-password')
+      .populate('ratings.user', 'name');
 
     if (!teacher) {
       return res.status(404).json({
@@ -160,7 +163,7 @@ router.get('/:id', async (req, res) => {
 // @access  Private (Student)
 router.post('/:id/rate', protect, restrictTo('student'), async (req, res) => {
   try {
-    const { rating, review } = req.body;
+    const { rating, review, videoReview } = req.body;
 
     if (!rating || rating < 1 || rating > 5) {
       return res.status(400).json({
@@ -173,6 +176,16 @@ router.post('/:id/rate', protect, restrictTo('student'), async (req, res) => {
       _id: req.params.id,
       role: 'teacher'
     });
+
+    const completedClass = await Connection.findOne({
+      teacher: teacher._id,
+      student: req.user.id,
+      status: 'accepted',
+      progressStatus: { $in: ['demo_done', 'classes_started'] }
+    });
+    if (!completedClass) {
+      return res.status(403).json({ success: false, message: 'Reviews are available after your demo or classes.' });
+    }
 
     if (!teacher) {
       return res.status(404).json({
@@ -190,11 +203,13 @@ router.post('/:id/rate', protect, restrictTo('student'), async (req, res) => {
       // Update existing rating
       alreadyRated.rating = rating;
       alreadyRated.review = review || alreadyRated.review;
+      alreadyRated.videoReview = videoReview || alreadyRated.videoReview;
     } else {
       teacher.ratings.push({
         user: req.user.id,
         rating,
         review
+        ,videoReview
       });
     }
 

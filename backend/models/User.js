@@ -5,6 +5,7 @@ const ratingSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   rating: { type: Number, min: 1, max: 5, required: true },
   review: { type: String, maxlength: 500 },
+  videoReview: { type: String, maxlength: 8000000 },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -61,6 +62,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true
     },
+    availabilitySlots: [{
+      day: { type: String, enum: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
+      start: { type: String, trim: true },
+      end: { type: String, trim: true }
+    }],
     bio: {
       type: String,
       maxlength: 1000
@@ -69,10 +75,31 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+    demoVideo: {
+      type: String,
+      default: ''
+    },
+    identityDocument: {
+      type: String,
+      default: '',
+      select: false
+    },
+    identityDocumentName: {
+      type: String,
+      default: ''
+    },
+    identityVerified: {
+      type: Boolean,
+      default: false
+    },
     location: {
       state: { type: String, trim: true },
       district: { type: String, trim: true },
-      city: { type: String, trim: true }
+      city: { type: String, trim: true },
+      coordinates: {
+        lat: { type: Number, min: -90, max: 90 },
+        lng: { type: Number, min: -180, max: 180 }
+      }
     },
     isApproved: {
       type: Boolean,

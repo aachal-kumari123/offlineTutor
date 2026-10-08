@@ -51,6 +51,11 @@ EMAIL_USER=your_gmail@gmail.com
 EMAIL_PASS=your_gmail_app_password
 EMAIL_FROM=TutorConnect <your_gmail@gmail.com>
 
+# Razorpay Test Mode (required for accepting more than one request)
+RAZORPAY_KEY_ID=rzp_test_your_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_test_secret
+ADMIN_EMAIL=admin@tutorconnect.com
+
 CLIENT_URL=http://localhost:5173
 ```
 
@@ -93,6 +98,8 @@ Server runs at: **http://localhost:5000**
 | POST | `/api/auth/login` | Public | Login |
 | GET | `/api/auth/me` | Private | Get current user |
 | PUT | `/api/auth/profile` | Private | Update profile |
+
+Teachers accepting a second or later request are sent through Razorpay Test Mode for the configured platform fee. Add `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` to `.env` before testing this flow.
 
 ### Teachers
 | Method | Endpoint | Access | Description |

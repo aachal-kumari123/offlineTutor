@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import { mediaFileToDataUrl } from '../utils/media';
 import {
   HiOutlineLocationMarker,
   HiOutlineStar,
@@ -14,6 +15,7 @@ import {
   HiOutlineMail,
   HiOutlineArrowLeft,
   HiOutlineCheckCircle,
+  HiOutlineCalendar,
 } from 'react-icons/hi';
 
 // Demo fallback
@@ -137,6 +139,13 @@ const TeacherDetail = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewVideo, setReviewVideo] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [requestingDemo, setRequestingDemo] = useState(false);
+  const [booking, setBooking] = useState(false);
 
   const {
     register,
@@ -178,8 +187,26 @@ const TeacherDetail = () => {
         teacherId: id,
         message: formData.message,
         studentPhone: formData.phone || user.phone,
+        requestedSubject: formData.requestedSubject,
+        requestedClass: formData.requestedClass,
+        requestedArea: formData.requestedArea,
       });
       setSent(true);
+      if (formData.requestedSubject && formData.requestedClass && formData.requestedArea) {
+        const fallbackLocation = teacher.location?.coordinates || { lat: 26.84, lng: 80.99 };
+        try {
+          const poolResponse = await api.post('/pools/find-or-create-pool', {
+            subject: formData.requestedSubject,
+            studentClass: formData.requestedClass,
+            area: formData.requestedArea,
+            location: fallbackLocation,
+            budget: teacher.feePerHour || 1500
+          });
+          toast.success(poolResponse.data.message);
+        } catch (poolError) {
+          toast.error(poolError.response?.data?.message || 'Request sent, but pool matching is unavailable');
+        }
+      }
       toast.success(
         data.emailSent
           ? 'Request sent! The teacher has been notified by email.'
@@ -197,6 +224,68 @@ const TeacherDetail = () => {
       }
     } finally {
       setSending(false);
+    }
+  };
+
+  const submitReview = async (event) => {
+    event.preventDefault();
+    if (!user || user.role !== 'student') {
+      toast.error('Please login as a student to leave a review');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      await api.post(`/teachers/${id}/rate`, {
+        rating: reviewRating,
+        review: reviewText.trim(),
+        videoReview: reviewVideo
+      });
+      const { data } = await api.get(`/teachers/${id}`);
+      setTeacher(data.teacher || data);
+      setReviewText('');
+      setReviewVideo('');
+      toast.success('Review submitted successfully');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const requestDemo = async () => {
+    if (!user) return navigate('/login');
+    if (user.role !== 'student') return toast.error('Only students can request a demo class');
+    setRequestingDemo(true);
+    try {
+      await api.post('/contact/demo', {
+        teacherId: id,
+        message: 'I would like to try a 1-day free demo class before starting regular tuition.',
+        slot: selectedSlot
+      });
+      toast.success('Demo class request sent to the teacher');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not request demo class');
+    } finally {
+      setRequestingDemo(false);
+    }
+  };
+
+  const bookSlot = async () => {
+    if (!user) return navigate('/login');
+    if (!selectedSlot) return toast.error('Select an available slot first');
+    setBooking(true);
+    try {
+      await api.post('/contact/book', {
+        teacherId: id,
+        slot: selectedSlot,
+        message: `Please confirm my ${selectedSlot.day} ${selectedSlot.start}-${selectedSlot.end} lesson.`
+      });
+      toast.success('Booking request sent to the teacher');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not book this slot');
+    } finally {
+      setBooking(false);
     }
   };
 
@@ -222,6 +311,9 @@ const TeacherDetail = () => {
   const loc = teacher.location
     ? [teacher.location.city, teacher.location.district, teacher.location.state].filter(Boolean).join(', ')
     : '—';
+  const availabilitySlots = teacher.availabilitySlots?.length
+    ? teacher.availabilitySlots
+    : [{ day: 'Mon', start: '5 PM', end: '7 PM' }];
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -255,8 +347,28 @@ const TeacherDetail = () => {
             <div className="pt-16 px-6 pb-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
+                  <label className="block text-sm font-medium mb-1.5">Subject</label>
+                  <select className="input-field" defaultValue={teacher.subjects?.[0] || ''} {...register('requestedSubject', { required: 'Select a subject' })}>
+                    <option value="">Select subject</option>
+                    {(teacher.subjects || []).map((subject) => <option key={subject}>{subject}</option>)}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Class</label>
+                    <input className="input-field" placeholder="Class 10" {...register('requestedClass', { required: 'Enter class' })} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Area</label>
+                    <input className="input-field" placeholder="Gomti Nagar" {...register('requestedArea', { required: 'Enter area' })} />
+                  </div>
+                </div>
+
+                <div>
                   <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white">
                     {teacher.name}
+                    {teacher.identityVerified && <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700 align-middle">✓ Verified Teacher</span>}
                   </h1>
                   {teacher.degree && (
                     <p className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 mt-1">
@@ -317,12 +429,39 @@ const TeacherDetail = () => {
                 <span className="text-gray-600 dark:text-gray-400">{teacher.availability}</span>
               </p>
             )}
+            <div className="mt-5">
+              <h3 className="flex items-center gap-2 font-semibold"><HiOutlineCalendar className="w-5 h-5 text-primary-500" /> Book an available slot</h3>
+              <div className="grid sm:grid-cols-2 gap-2 mt-3">
+                {availabilitySlots.map((slot, index) => (
+                  <button
+                    type="button"
+                    key={`${slot.day}-${slot.start}-${index}`}
+                    onClick={() => setSelectedSlot(slot)}
+                    className={`rounded-lg border px-3 py-2 text-left text-sm ${selectedSlot === slot ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 dark:border-gray-700'}`}
+                  >
+                    <span className="font-semibold">{slot.day}</span> {slot.start} - {slot.end}
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={bookSlot} disabled={booking || user?.role === 'teacher'} className="btn-primary mt-3 text-sm disabled:opacity-50">
+                {booking ? 'Requesting...' : 'Book this slot'}
+              </button>
+            </div>
           </div>
 
-          {/* Reviews */}
-          {teacher.ratings && teacher.ratings.length > 0 && (
+          {teacher.demoVideo && (
             <div className="card p-6">
-              <h2 className="text-lg font-bold mb-4">Reviews</h2>
+              <h2 className="text-lg font-bold mb-3">Teaching Demo</h2>
+              <video controls className="w-full rounded-lg bg-slate-950" src={teacher.demoVideo}>
+                Your browser does not support video playback.
+              </video>
+            </div>
+          )}
+
+          {/* Reviews */}
+          <div className="card p-6">
+            <h2 className="text-lg font-bold mb-4">Reviews</h2>
+            {teacher.ratings?.length ? (
               <div className="space-y-4">
                 {teacher.ratings.map((r, i) => (
                   <div key={i} className="border-b border-gray-100 dark:border-gray-700 last:border-0 pb-4 last:pb-0">
@@ -339,12 +478,56 @@ const TeacherDetail = () => {
                       </div>
                       <span className="text-sm font-medium">{r.user?.name || 'Anonymous'}</span>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{r.review}</p>
+                    {r.review && <p className="text-sm text-gray-600 dark:text-gray-400">{r.review}</p>}
+                    {r.videoReview && <video controls className="mt-2 max-h-56 w-full rounded-lg bg-slate-950" src={r.videoReview}>Your browser does not support video playback.</video>}
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-gray-500">No reviews yet.</p>
+            )}
+
+            {user?.role === 'student' && (
+              <form onSubmit={submitReview} className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-700 space-y-3">
+                <h3 className="font-semibold">Leave a review</h3>
+                <div className="flex gap-1" aria-label="Rating">
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <button
+                      key={rating}
+                      type="button"
+                      onClick={() => setReviewRating(rating)}
+                      className="p-1"
+                      aria-label={`${rating} star${rating > 1 ? 's' : ''}`}
+                    >
+                      <HiOutlineStar className={`w-6 h-6 ${rating <= reviewRating ? 'text-accent-500 fill-accent-500' : 'text-gray-300'}`} />
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={reviewText}
+                  onChange={(event) => setReviewText(event.target.value)}
+                  className="input-field resize-none"
+                  rows={3}
+                  maxLength={500}
+                  placeholder="Share your learning experience"
+                />
+                <label className="block text-sm font-medium">Optional video review</label>
+                <input type="file" accept="video/*" className="input-field py-2" onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    setReviewVideo(await mediaFileToDataUrl(file));
+                  } catch (error) {
+                    toast.error(error.message);
+                  }
+                }} />
+                <p className="text-xs text-gray-500">Your review becomes available after the teacher marks Demo Done or Classes Started.</p>
+                <button type="submit" disabled={submittingReview} className="btn-primary text-sm disabled:opacity-50">
+                  {submittingReview ? 'Submitting...' : 'Submit Review'}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
 
         {/* Right — Connect form */}
@@ -354,6 +537,10 @@ const TeacherDetail = () => {
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
               Send a message. The teacher will receive an email notification.
             </p>
+
+            <button type="button" onClick={requestDemo} disabled={requestingDemo || user?.role === 'teacher'} className="w-full mb-5 rounded-lg border-2 border-accent-500 px-4 py-2.5 font-semibold text-accent-700 dark:text-accent-300 disabled:opacity-50">
+              {requestingDemo ? 'Sending demo request...' : 'Request 1-Day Free Demo'}
+            </button>
 
             {sent ? (
               <div className="text-center py-6">

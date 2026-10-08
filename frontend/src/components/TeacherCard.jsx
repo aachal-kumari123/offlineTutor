@@ -13,6 +13,8 @@ const TeacherCard = ({ teacher }) => {
     averageRating = 0,
     profileImage,
     bio,
+    matchScore,
+    distanceKm,
   } = teacher;
 
   const loc = location
@@ -39,12 +41,18 @@ const TeacherCard = ({ teacher }) => {
             {averageRating.toFixed(1)}
           </div>
         )}
+        {matchScore >= 70 && (
+          <div className="absolute bottom-3 left-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-emerald-700 shadow">
+            {matchScore}% match
+          </div>
+        )}
       </div>
 
       {/* Body */}
       <div className="p-5 flex flex-col flex-1">
         <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition">
           {name}
+          {teacher.identityVerified && <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">✓ Verified</span>}
         </h3>
 
         {degree && (
@@ -58,6 +66,11 @@ const TeacherCard = ({ teacher }) => {
           <HiOutlineLocationMarker className="w-4 h-4 shrink-0" />
           <span className="truncate">{loc}</span>
         </div>
+        {distanceKm !== undefined && (
+          <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+            {distanceKm < 1 ? 'Less than 1 km away' : `${distanceKm.toFixed(1)} km away`}
+          </p>
+        )}
 
         {/* Subjects */}
         <div className="flex flex-wrap gap-1.5 mt-3">

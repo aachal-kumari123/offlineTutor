@@ -7,6 +7,11 @@ const cors = require('cors');
 const authRoutes = require('./routes/auth');
 const teachersRoutes = require('./routes/teachers');
 const contactRoutes = require('./routes/contact');
+const chatRoutes = require('./routes/chat');
+const Connection = require('./models/Connection');
+const Pool = require('./models/Pool');
+const { router: poolRoutes } = require('./routes/poolRoutes');
+const notifyOpenPools = require('./utils/poolExpiry');
 
 const app = express();
 
@@ -33,6 +38,8 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/teachers', teachersRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/pools', poolRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -58,6 +65,11 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ MongoDB connected successfully');
+    return Promise.all([Connection.syncIndexes(), Pool.syncIndexes()]);
+  })
+  .then(() => {
+    setInterval(() => notifyOpenPools().catch((error) => console.error('Pool reminder job failed:', error.message)), 10 * 60 * 1000);
+    notifyOpenPools().catch((error) => console.error('Initial pool reminder job failed:', error.message));
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
     });

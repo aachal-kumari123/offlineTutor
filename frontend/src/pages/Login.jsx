@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { useAuth } from '../context/AuthContext';
 import { getStates, getDistricts, getCities, subjectsList } from '../data/locations';
 import { imageFileToDataUrl } from '../utils/image';
+import { mediaFileToDataUrl } from '../utils/media';
 import {
   HiOutlineAcademicCap,
   HiOutlineUser,
@@ -22,6 +23,7 @@ const Login = () => {
   const [cities, setCities] = useState([]);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [profileImage, setProfileImage] = useState('');
+  const [demoVideo, setDemoVideo] = useState('');
   const [imageError, setImageError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -100,6 +102,7 @@ const Login = () => {
           role,
           phone: data.phone || undefined,
           profileImage: profileImage || undefined,
+          demoVideo: role === 'teacher' ? demoVideo || undefined : undefined,
         };
 
         if (role === 'teacher') {
@@ -131,8 +134,22 @@ const Login = () => {
     reset();
     setSelectedSubjects([]);
     setProfileImage('');
+    setDemoVideo('');
     setImageError('');
     setRole('student');
+  };
+
+  const handleVideoChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      setImageError('');
+      setDemoVideo(await mediaFileToDataUrl(file));
+    } catch (error) {
+      setDemoVideo('');
+      setImageError(error.message);
+    }
   };
 
   const handleImageChange = async (event) => {
@@ -149,22 +166,58 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-10 px-4 bg-gradient-to-br from-orange-50 via-white to-amber-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
-      <div className="w-full max-w-lg">
-        {/* Card */}
-        <div className="card p-6 md:p-8 shadow-xl animate-fade-in">
+    <div className="min-h-screen bg-[#fff8f1] px-4 py-5 dark:bg-gray-950 sm:px-8 lg:flex lg:items-center lg:justify-center lg:py-8">
+      <div className="flex w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl shadow-orange-900/10 dark:bg-gray-900 lg:min-h-[650px] lg:flex-row">
+      <section className="relative isolate min-h-[440px] overflow-hidden bg-[#fff7ef] text-slate-800 lg:min-h-0 lg:w-[53%] dark:bg-[#342318] dark:text-white">
+        <div
+          className="absolute inset-0 -z-20 scale-105 bg-cover bg-center opacity-15 blur-[2px]"
+          style={{
+            backgroundImage:
+                "url('https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=1200&q=85')",
+          }}
+        />
+              <div className="absolute inset-0 -z-10 bg-orange-50/85 dark:bg-orange-950/75" />
+              <div className="absolute -right-24 top-10 -z-10 h-72 w-72 rounded-full bg-orange-200/60 blur-2xl dark:bg-orange-900/50" />
+              <div className="absolute bottom-12 left-1/3 -z-10 h-44 w-72 rotate-12 rounded-[45%] bg-white/70 dark:bg-orange-800/30" />
+        <div className="relative flex h-full min-h-[430px] flex-col p-8 sm:p-12 lg:p-14">
+          <Link to="/" className="flex w-fit items-center gap-2 text-sm font-bold tracking-wide text-slate-700 dark:text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-600 text-white shadow-lg shadow-orange-600/25">
+              <HiOutlineAcademicCap className="h-5 w-5" />
+            </span>
+            Offline Tutor
+          </Link>
+          <div className="max-w-md animate-slide-up lg:mt-16">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-orange-300">Welcome to Offline Tutor</p>
+            <h2 className="text-4xl font-black leading-tight text-slate-800 dark:text-white sm:text-5xl">Learn smarter,<br /><span className="text-primary-600">achieve more.</span></h2>
+            <p className="mt-5 max-w-sm text-sm leading-6 text-slate-600 dark:text-white/70">
+              Your all-in-one platform for finding trusted tutors, learning confidently, and building a brighter future.
+            </p>
+            <div className="mt-7 grid max-w-sm grid-cols-2 gap-x-5 gap-y-4 text-xs font-semibold text-slate-700 dark:text-white/80">
+              <span className="flex items-center gap-2"><span className="rounded-md bg-white p-1.5 text-primary-600 shadow-sm">◇</span>Find expert tutors</span>
+              <span className="flex items-center gap-2"><span className="rounded-md bg-white p-1.5 text-primary-600 shadow-sm">□</span>Learn at your pace</span>
+              <span className="flex items-center gap-2"><span className="rounded-md bg-white p-1.5 text-primary-600 shadow-sm">↗</span>Track your progress</span>
+              <span className="flex items-center gap-2"><span className="rounded-md bg-white p-1.5 text-primary-600 shadow-sm">☆</span>Achieve your goals</span>
+            </div>
+          </div>
+          <div className="mt-auto hidden max-w-sm rounded-xl bg-white/70 p-4 text-xs leading-5 text-slate-600 shadow-sm dark:bg-white/10 dark:text-white/70 sm:block">
+            <span className="mr-2 text-xl font-black text-primary-600">“</span>
+            A trusted place for curious minds and great teachers.
+          </div>
+        </div>
+      </section>
+
+      <section className="flex flex-1 items-center justify-center bg-white px-4 py-10 dark:bg-gray-900 sm:px-8 lg:w-[47%] lg:px-12 lg:py-14">
+        <div className="w-full max-w-xl">
+          <div className="card rounded-none border-0 p-6 shadow-none hover:shadow-none animate-fade-in md:p-8">
           {/* Header */}
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-600 text-white mb-3">
-              <HiOutlineAcademicCap className="w-8 h-8" />
-            </div>
             <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">
-              {mode === 'login' ? 'Welcome Back' : 'Create Account'}
+              {mode === 'login' ? 'Welcome back! 👋' : 'Create your account'}
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
+            <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">
               {mode === 'login'
                 ? 'Login to continue your learning journey'
-                : 'Join TutorConnect as a student or teacher'}
+                : 'Join Offline Tutor as a student or teacher'}
             </p>
           </div>
 
@@ -193,6 +246,24 @@ const Login = () => {
               Sign Up
             </button>
           </div>
+
+            {mode === 'login' && (
+              <>
+                <div className="mb-5 space-y-2.5">
+                  <button type="button" className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 py-3 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+                    <span className="font-bold text-blue-500">G</span> Continue with Google
+                  </button>
+                  <button type="button" className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 py-3 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+                    <span className="font-bold text-orange-500">M</span> Continue with Microsoft
+                  </button>
+                </div>
+                <div className="mb-5 flex items-center gap-3 text-xs text-gray-400">
+                  <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+                  or
+                  <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+                </div>
+              </>
+            )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {/* Role selection (signup only) */}
@@ -295,6 +366,16 @@ const Login = () => {
               </div>
               {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
             </div>
+
+            {mode === 'login' && (
+              <div className="flex items-center justify-between text-xs">
+                <label className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                  <input type="checkbox" className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                  Remember me
+                </label>
+                <button type="button" className="font-medium text-primary-600 hover:underline dark:text-primary-400">Forgot password?</button>
+              </div>
+            )}
 
             {/* Phone (signup) */}
             {mode === 'signup' && (
@@ -462,6 +543,14 @@ const Login = () => {
                     {...register('bio')}
                   />
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Teaching Demo Video</label>
+                  <input type="file" accept="video/*" onChange={handleVideoChange} className="input-field py-2" />
+                  <p className="text-xs text-gray-500 mt-1">MP4 or WebM, maximum 6 MB.</p>
+                  {demoVideo && <p className="text-xs text-green-600 mt-1">Video ready to upload.</p>}
+                  {imageError && <p className="text-red-500 text-xs mt-1">{imageError}</p>}
+                </div>
               </div>
             )}
 
@@ -514,6 +603,8 @@ const Login = () => {
             ← Back to Home
           </Link>
         </p>
+      </div>
+      </section>
       </div>
     </div>
   );
