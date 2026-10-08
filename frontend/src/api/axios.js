@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+const configuredApiUrl = import.meta.env.VITE_API_URL || 'https://offlinetutor.onrender.com';
+const normalizedApiUrl = configuredApiUrl.replace(/\/+$/, '');
+const apiBaseURL = /\/api$/i.test(normalizedApiUrl) ? normalizedApiUrl : `${normalizedApiUrl}/api`;
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://offlinetutor.onrender.com/',
+  baseURL: apiBaseURL,
   headers: {
     'Content-Type': 'application/json',
   },

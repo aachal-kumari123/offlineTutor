@@ -16,9 +16,18 @@ const notifyOpenPools = require('./utils/poolExpiry');
 const app = express();
 
 // Middleware
+const allowedOrigins = new Set([
+  'http://localhost:5173',
+  'https://offline-tutor.vercel.app',
+  ...(process.env.CLIENT_URL || '').split(',').map((origin) => origin.trim()).filter(Boolean)
+]);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+      return callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    },
     credentials: true
   })
 );
